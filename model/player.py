@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from typing import Callable, Dict, Union, Tuple
 
 
+# TODO: make player immutable
 @dataclass()
 class Player:
     state: Dict[str, Union[list, str, bool]]

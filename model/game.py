@@ -2,8 +2,8 @@ class Game:
     def initialize_game(self):
         pass
 
-    def next_turn(self):
+    def next_turn(self, ):
         pass
 
-    def show(self):
+    def show(self, my_plt):
         pass
