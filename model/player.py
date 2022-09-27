@@ -1,5 +1,5 @@
 from __future__ import annotations
-from copy import deepcopy
+
 from dataclasses import dataclass
 from typing import Callable, Dict, Union, Tuple
 
@@ -12,9 +12,8 @@ class Player:
     interact_player: Callable[[Player, Player], Player]
     evolve: Callable[[Player], Player]
 
-    def clone(self) -> Player:
-        state = deepcopy(self.state)
-        return Player(state, self.location, self.interact_player, self.evolve)
+    def clone(self):
+        pass
 
 
 class CellPlayer(Player):

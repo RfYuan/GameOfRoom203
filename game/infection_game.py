@@ -9,21 +9,22 @@ from model.game import Game
 from util.player_interaction import *
 
 # Map related Const
-NUM_PLAYER = 10
+NUM_PLAYER = 50
 MAP_SIZE = (50, 50)
 
 # Player Related Const
 LIFE_KEY = "Life"
 MAX_AGE = 100
-AGE_SPEED_MAX = 2
+AGE_SPEED_MAX = 3
 Infected_key = "Infected"
 Infection_rate_key = "Infection Rate"
 Recover_rate_key = "Recover Rate"
-EFFECTIVE_INFECTION_DIST = 5.0
+EFFECTIVE_INFECTION_DIST = 10.0
+INITIAL_INFECTION_RATE = 0.5
 default_player_state = {
-    LIFE_KEY: 150,
+    LIFE_KEY: 50,
     Infected_key: False,
-    Infection_rate_key: 0.3,
+    Infection_rate_key: 0.7,
     Recover_rate_key: 0.2,
 }
 
@@ -45,7 +46,7 @@ def interact_player_infection(p1: Player, p2: Player) -> Player:
         return p1
     resulting_player = p1.clone()
     if p2.state[Infected_key]:
-        infected_dice = random()
+        infected_dice = random.random()
         if infected_dice > p1.state[Infection_rate_key] * (
                 2 * EFFECTIVE_INFECTION_DIST + 1 - distance) / EFFECTIVE_INFECTION_DIST:
             resulting_player.state[Infected_key] = True
@@ -55,9 +56,9 @@ def interact_player_infection(p1: Player, p2: Player) -> Player:
 def initialize_player_loc_in_rectangle(w, l, number_of_player):
     loc_list = []
     for i in range(number_of_player):
-        i, j = random.randint(0, w), random.randint(0, l)
+        i, j = random.randint(0, w - 1), random.randint(0, l - 1)
         while (i, j) in loc_list:
-            i, j = random.randint(0, w), random.randint(0, l)
+            i, j = random.randint(0, w - 1), random.randint(0, l - 1)
         loc_list.append((i, j))
     return loc_list
 
@@ -66,18 +67,46 @@ def init_infection_game(rectangle_map=MAP_SIZE, number_of_player: int = NUM_PLAY
     i, j = rectangle_map
     players_locs = initialize_player_loc_in_rectangle(i, j, number_of_player)
     players = create_players(locations=players_locs, player_states=[None for _ in range(number_of_player)])
+    players = init_infected_player(players)
     return InfectionGame(rectangle_map=rectangle_map, players=players)
 
 
+def cure_player(player):
+    infected_dice = random.random()
+    if infected_dice < player.state[Recover_rate_key]:
+        return player.cure()
+    else:
+        return player
+
+
+# Immutable
 class InfectionPlayer(Player):
     def __init__(self, location, state=None, ):
         if state is None:
             state = default_player_state
         self.location = location
         self.interact_player = interact_player_infection
-        self.evolve = age_player
+        self.evolve = lambda x: age_player(cure_player(x))
         self.state = deepcopy(state)
         # self.
+
+    def infected(self):
+        new = self.clone()
+        new.state[Infected_key] = 1
+        return new
+
+    def cure(self):
+        new = self.clone()
+        new.state[Infected_key] = 0
+        return new
+
+    def clone(self):
+        state = deepcopy(self.state)
+        return InfectionPlayer(self.location, state)
+
+
+def init_infected_player(players: [InfectionPlayer], inital_infection_rate: float = INITIAL_INFECTION_RATE):
+    return [p.infected() if (random.random() > inital_infection_rate) else p for p in players]
 
 
 class InfectionGame(Game):
@@ -94,9 +123,16 @@ class InfectionGame(Game):
         self.rectangle_map = rectangle_map
 
     def next_turn(self):
+        print([x.state[LIFE_KEY] for x in self.players])
+
         old_players_evolved = [player.evolve(player) for player in self.players]
         result = [interact_players(player, old_players_evolved) for player in old_players_evolved]
-        result = [player.evolve(player) for player in result]
+        # result = [player.evolve(player) for player in result]
+        # tmp = [x.state[LIFE_KEY] for x in result]
+        print([x.state[LIFE_KEY] for x in result])
+        result = list(filter(lambda x: x.state[LIFE_KEY] > 0, result))
+        print([x.state[LIFE_KEY] for x in result])
+
         self.players = result
 
     def get_graph_origin(self) -> List[List[float]]:
@@ -114,8 +150,9 @@ class InfectionGame(Game):
 
     def show(self, my_plt):
         Z = self.get_graph_origin()
-        my_plt.plot(Z, cm.get_cmap("Spectral"), interpolation='nearest')
+        my_plt.imshow(Z, cm.get_cmap("Spectral"), interpolation='nearest')
 
-    def next_turn_and_show(self,i, my_plt):
+    def next_turn_and_show(self, i, my_plt):
         self.next_turn()
+        print(i, "turn")
         self.show(my_plt)
