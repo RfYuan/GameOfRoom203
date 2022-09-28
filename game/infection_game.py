@@ -1,6 +1,7 @@
 # from random import random as random
 import random
 from copy import deepcopy
+from dataclasses import dataclass
 from typing import Tuple, List
 
 import matplotlib.cm as cm
@@ -36,10 +37,6 @@ def age_player(player: Player, max_age_speed=AGE_SPEED_MAX) -> Player:
     return result
 
 
-def create_players(locations: [Tuple[int, int]], player_states: [{}]) -> [CellPlayer]:
-    return [InfectionPlayer(location=loc, state=state) for loc, state in zip(locations, player_states)]
-
-
 def interact_player_infection(p1: Player, p2: Player) -> Player:
     distance = euclid_distance(p1, p2)
     if distance > EFFECTIVE_INFECTION_DIST:
@@ -63,32 +60,17 @@ def initialize_player_loc_in_rectangle(w, l, number_of_player):
     return loc_list
 
 
-def init_infection_game(rectangle_map=MAP_SIZE, number_of_player: int = NUM_PLAYER):
-    i, j = rectangle_map
-    players_locs = initialize_player_loc_in_rectangle(i, j, number_of_player)
-    players = create_players(locations=players_locs, player_states=[None for _ in range(number_of_player)])
-    players = init_infected_player(players)
-    return InfectionGame(rectangle_map=rectangle_map, players=players)
-
-
-def cure_player(player):
-    infected_dice = random.random()
-    if infected_dice < player.state[Recover_rate_key]:
-        return player.cure()
-    else:
-        return player
-
-
 # Immutable
-class InfectionPlayer(Player):
-    def __init__(self, location, state=None, ):
+@dataclass()
+class InfectionPlayer(CellPlayer):
+
+    def __init__(self, state, location, interact_player, evolve):
         if state is None:
             state = default_player_state
+        self.state = state
         self.location = location
-        self.interact_player = interact_player_infection
-        self.evolve = lambda x: age_player(cure_player(x))
-        self.state = deepcopy(state)
-        # self.
+        self.interact_player = interact_player
+        self.evolve = evolve
 
     def infected(self):
         new = self.clone()
@@ -102,38 +84,34 @@ class InfectionPlayer(Player):
 
     def clone(self):
         state = deepcopy(self.state)
-        return InfectionPlayer(self.location, state)
+        return InfectionPlayer(state, self.location, self.interact_player, self.evolve)
 
 
 def init_infected_player(players: [InfectionPlayer], inital_infection_rate: float = INITIAL_INFECTION_RATE):
     return [p.infected() if (random.random() > inital_infection_rate) else p for p in players]
 
 
-class InfectionGame(Game):
-    # default_state = {
-    #     Infected_key: False,
-    #     Infection_rate_key: 0.5,
-    #     Recover_rate_key: 0.7,
-    # }
+def cure_player_by_chance(player: InfectionPlayer) -> InfectionPlayer:
+    infected_dice = random.random()
+    if infected_dice < player.state[Recover_rate_key]:
+        return player.cure()
+    else:
+        return player
 
-    def __init__(self, rectangle_map=MAP_SIZE, players=None):
+
+class InfectionGame(Game):
+    def __init__(self, rectangle_map=MAP_SIZE, players: [InfectionPlayer] = None):
         if players is None:
             players = []
-        self.players: [CellPlayer] = players
+        self.players: [InfectionPlayer] = players
         self.rectangle_map = rectangle_map
 
     def next_turn(self):
-        print([x.state[LIFE_KEY] for x in self.players])
-
         old_players_evolved = [player.evolve(player) for player in self.players]
-        result = [interact_players(player, old_players_evolved) for player in old_players_evolved]
-        # result = [player.evolve(player) for player in result]
-        # tmp = [x.state[LIFE_KEY] for x in result]
-        print([x.state[LIFE_KEY] for x in result])
-        result = list(filter(lambda x: x.state[LIFE_KEY] > 0, result))
-        print([x.state[LIFE_KEY] for x in result])
+        player_interacted = [interact_players(player, old_players_evolved) for player in old_players_evolved]
+        player_alive = list(filter(lambda x: x.state[LIFE_KEY] > 0, player_interacted))
 
-        self.players = result
+        self.players = player_alive
 
     def get_graph_origin(self) -> List[List[float]]:
         length, width = self.rectangle_map
@@ -156,3 +134,19 @@ class InfectionGame(Game):
         self.next_turn()
         print(i, "turn")
         self.show(my_plt)
+
+
+def create_infection_player(locations: [Tuple[int, int]], player_states: [{}]) -> [InfectionPlayer]:
+    return [InfectionPlayer(state=state,
+                            location=loc,
+                            evolve=lambda x: age_player(cure_player_by_chance(x)),
+                            interact_player=interact_player_infection)
+            for loc, state in zip(locations, player_states)]
+
+
+def init_infection_game(rectangle_map=MAP_SIZE, number_of_player: int = NUM_PLAYER):
+    i, j = rectangle_map
+    players_locs = initialize_player_loc_in_rectangle(i, j, number_of_player)
+    players = create_infection_player(locations=players_locs, player_states=[None for _ in range(number_of_player)])
+    players = init_infected_player(players)
+    return InfectionGame(rectangle_map=rectangle_map, players=players)
