@@ -1,15 +1,16 @@
 # from random import random as random
-import random
 from copy import deepcopy
 from dataclasses import dataclass
-from typing import Tuple, List
+from typing import List
 
 import matplotlib.cm as cm
 
 from model.game import Game
 from util.player_interaction import *
-
 # Map related Const
+from util.player_interaction import age_player, initialize_locations_in_rectangle, \
+    test_player_location_out_of_cube_bounds, generate_new_location_around_current
+
 NUM_PLAYER = 50
 MAP_SIZE = (50, 50)
 
@@ -30,43 +31,6 @@ default_player_state = {
     Recover_rate_key: 0.2,
     Birth_rate_key: 0.05,
 }
-
-
-def age_player(player: Player, max_age_speed=AGE_SPEED_MAX) -> Player:
-    result = player.clone()
-    age_speed = random.randint(1, max_age_speed + 1)
-    result.state[LIFE_KEY] -= age_speed
-    return result
-
-
-def initialize_locations_in_rectangle(w, l, number_of_player):
-    loc_list = []
-    for i in range(number_of_player):
-        i, j = random.randint(0, w - 1), random.randint(0, l - 1)
-        while (i, j) in loc_list:
-            i, j = random.randint(0, w - 1), random.randint(0, l - 1)
-        loc_list.append((i, j))
-    return loc_list
-
-
-def test_player_location_out_of_cube_bounds(cube_size: Tuple[int, ...], loc: Tuple[int, ...]) -> bool:
-    return all(0 <= i < b for i, b in zip(loc, cube_size))
-
-
-def generate_new_location_around_current(current: Tuple[int, ...], possibility_birth: float = 0.005) -> Tuple[int, ...]:
-    p_not_birth = 1 - possibility_birth
-    dim = len(current)
-    p_not_birth_each_direction = (p_not_birth ** (1. / dim))
-    p_birth_in_each_direction = (1 - p_not_birth_each_direction) / 2
-    new_pos = list(current)
-    for i in range(dim):
-        dim_dice = random.random()
-        if dim_dice < p_birth_in_each_direction:
-            new_pos[i] -= 1
-        elif dim_dice > 1 - p_birth_in_each_direction:
-            new_pos[i] += 1
-    new_pos = tuple(new_pos)
-    return new_pos
 
 
 # Immutable
@@ -171,11 +135,6 @@ class InfectionGame(Game):
     def show(self, my_plt):
         Z = self.get_graph_origin()
         my_plt.imshow(Z, cm.get_cmap("Spectral"), interpolation='nearest')
-
-    def next_turn_and_show(self, i, my_plt):
-        self.next_turn()
-        print(i, "turn")
-        self.show(my_plt)
 
 
 def init_infection_game(rectangle_map=MAP_SIZE, number_of_player: int = NUM_PLAYER):

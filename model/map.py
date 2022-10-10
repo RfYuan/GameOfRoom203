@@ -4,7 +4,7 @@ from typing import List
 from model.plotter import Plotter
 from util import visualization
 
-
+# unused for now, as we dont have complicated cells
 @dataclass
 class GameRoom203Cell:
     # state had state(0-255,0-255,0-255)
@@ -13,6 +13,7 @@ class GameRoom203Cell:
     #     self._state = state
 
 
+# unused for now
 @dataclass
 class GameRoom203Map:
     cells: List[List[GameRoom203Cell]] = field(default_factory=list)
