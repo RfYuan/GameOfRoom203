@@ -1,45 +1,49 @@
 # from random import random as random
 from copy import deepcopy
 from dataclasses import dataclass
-from typing import List
+from typing import List, Dict, Optional, Iterable
 
 import matplotlib.cm as cm
 
 from model.game import Game
-from util.player_interaction import *
+from model.map import TwoDimLocation
+from model.player import CellPlayer2D
+from service.player_evolve import generate_children_in_2d, get_new_id
+from util.player_interaction_related import *
 # Map related Const
-from util.player_interaction import age_player, initialize_locations_in_rectangle, \
-    test_player_location_out_of_cube_bounds, generate_new_location_around_current
+from util.player_interaction_related import age_player, initialize_locations_in_rectangle, \
+    LIFE_KEY
 
-NUM_PLAYER = 50
+NUM_PLAYER = 4
 MAP_SIZE = (50, 50)
 
 # Player Related Const
-LIFE_KEY = "Life"
 MAX_AGE = 100
-AGE_SPEED_MAX = 3
 Infected_key = "Infected"
 Infection_rate_key = "Infection Rate"
 Recover_rate_key = "Recover Rate"
 Birth_rate_key = "Birth Rate"
-EFFECTIVE_INFECTION_DIST = 10.0
+EFFECTIVE_INFECTION_DIST = 5.0
 INITIAL_INFECTION_RATE = 0.5
+Next_Children_Name_Key = 'Next Children Name'
 default_player_state = {
+    Next_Children_Name_Key: 'A',
     LIFE_KEY: 50,
     Infected_key: False,
     Infection_rate_key: 0.7,
-    Recover_rate_key: 0.2,
+    Recover_rate_key: 0.5,
     Birth_rate_key: 0.05,
 }
 
 
 # Immutable
 @dataclass()
-class InfectionPlayer(CellPlayer):
+class InfectionPlayer(CellPlayer2D):
 
-    def __init__(self, state, location, interact_player, evolve):
+    def __init__(self, id, state, location, interact_player, evolve):
         if state is None:
             state = default_player_state
+        self.id = id
         self.state = state
         self.location = location
         self.interact_player = interact_player
@@ -47,17 +51,18 @@ class InfectionPlayer(CellPlayer):
 
     def infected(self):
         new = self.clone()
-        new.state[Infected_key] = 1
+        new.state[Infected_key] = True
         return new
 
     def cure(self):
         new = self.clone()
-        new.state[Infected_key] = 0
+        new.state[Infected_key] = False
         return new
 
     def clone(self):
         state = deepcopy(self.state)
-        return InfectionPlayer(state, self.location, self.interact_player, self.evolve)
+        return InfectionPlayer(state=state, id=self.id, location=self.location, interact_player=self.interact_player,
+                               evolve=self.evolve)
 
 
 def init_infected_player(players: [InfectionPlayer], inital_infection_rate: float = INITIAL_INFECTION_RATE):
@@ -85,23 +90,42 @@ def cure_player_by_chance(player: InfectionPlayer) -> InfectionPlayer:
         return player
 
 
-def create_infection_player(locations: [Tuple[int, int]], player_states: [{}]) -> [InfectionPlayer]:
-    return [InfectionPlayer(state=state,
+infection_player_evolve = lambda x: age_player(cure_player_by_chance(x))
+
+
+def infection_player_reborn(player: InfectionPlayer, loc: TwoDimLocation) -> InfectionPlayer:
+    if loc == player.location:
+        raise ValueError("Location of the children is the same as parent")
+
+    children = player.clone()
+    children.id = get_new_id(player.id)
+    children.location = loc
+    return children
+
+
+def intialize_infection_players(names: Iterable[str], locations: List[TwoDimLocation],
+                                player_states: List[Optional[Dict]]) -> [
+    InfectionPlayer]:
+    return [InfectionPlayer(id=name,
+                            state=state,
                             location=loc,
-                            evolve=lambda x: age_player(cure_player_by_chance(x)),
+                            evolve=infection_player_evolve,
                             interact_player=interact_infection_player)
-            for loc, state in zip(locations, player_states)]
+            for name, loc, state in zip(names, locations, player_states)]
 
 
-def generate_new_players(players: [InfectionPlayer], map_size: Tuple[int, ...]) -> [InfectionPlayer]:
-    player_locs = [i.location for i in players]
-    new_locs = [generate_new_location_around_current(player.location, player.state[Birth_rate_key]) for player in
-                players]
-    new_locs_filter_out_of_bounds = filter(lambda loc: test_player_location_out_of_cube_bounds(
-        map_size, loc), new_locs)
-    new_locs_not_overlap = list(filter(lambda x: x not in player_locs, new_locs_filter_out_of_bounds))
+def give_born_new_infection_player(player: InfectionPlayer, rectangle_map: TwoDimLocation) -> Optional[InfectionPlayer]:
+    if random.random() < player.state[Birth_rate_key]:
+        return None
+    new_children = generate_children_in_2d(player.location, rectangle_map,
+                                           lambda loc: infection_player_reborn(player, loc),
+                                           )
+    return new_children
 
-    new_players = create_infection_player(new_locs_not_overlap, [None for _ in range(len(new_locs_not_overlap))])
+
+def generate_new_players(players: [InfectionPlayer], map_size: TwoDimLocation) -> [InfectionPlayer]:
+    new_players = [give_born_new_infection_player(player, map_size) for player in players]
+    new_players = list(filter(lambda x: x is not None, new_players))
     return players + new_players
 
 
@@ -114,7 +138,7 @@ class InfectionGame(Game):
 
     def next_turn(self):
         old_players_evolved = [player.evolve(player) for player in self.players]
-        player_interacted = [interact_players(player, old_players_evolved) for player in old_players_evolved]
+        player_interacted = [interact_cell_players(player, old_players_evolved) for player in old_players_evolved]
         player_alive = list(filter(lambda x: x.state[LIFE_KEY] > 0, player_interacted))
         new_players = generate_new_players(player_alive, self.rectangle_map)
         self.players = new_players
@@ -127,19 +151,20 @@ class InfectionGame(Game):
             i, j = player.location
 
             if player_state.get(Infected_key):
-                result[i][j] = 1
-            else:
                 result[i][j] = 0.5
+            else:
+                result[i][j] = 1
         return result
 
     def show(self, my_plt):
         Z = self.get_graph_origin()
-        my_plt.imshow(Z, cm.get_cmap("Spectral"), interpolation='nearest')
+        my_plt.imshow(Z, cm.get_cmap("Greys"), interpolation='nearest')
 
 
 def init_infection_game(rectangle_map=MAP_SIZE, number_of_player: int = NUM_PLAYER):
     i, j = rectangle_map
     players_locs = initialize_locations_in_rectangle(i, j, number_of_player)
-    players = create_infection_player(locations=players_locs, player_states=[None for _ in range(number_of_player)])
+    players = intialize_infection_players(names=[str(i) for i in range(len(players_locs))], locations=players_locs,
+                                          player_states=[None for _ in range(number_of_player)])
     players = init_infected_player(players)
     return InfectionGame(rectangle_map=rectangle_map, players=players)
