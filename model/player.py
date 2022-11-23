@@ -9,7 +9,7 @@ from model.map import MultiDimLocation, TwoDimLocation
 
 @dataclass()
 class Player:
-    state: Dict[str, Union[list, str, bool]]
+    state: Dict[str, Union[list, str, bool, float, int]]
     location: MultiDimLocation
     interact_player: Callable[[Player, Player], Player]
     evolve: Callable[[Player], Player]
