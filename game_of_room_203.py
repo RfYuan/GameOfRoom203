@@ -1,5 +1,5 @@
 from game.infection_game import init_infection_game
-from util.game_plotter import plot_game_anime
+from service.game_plotter import plot_game_anime
 
 # map = init_test_map()
 # print(map.cells)
