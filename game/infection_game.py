@@ -8,24 +8,20 @@ import matplotlib.cm as cm
 from model.game import Game
 from model.map import TwoDimLocation
 from model.player import CellPlayer2D
-from service.player_evolve import generate_children_in_2d, get_new_id
+from util.game_state_keys import Infected_key, Infection_rate_key, Recover_rate_key, Birth_rate_key, \
+    Next_Children_Name_Key, LIFE_KEY
+from util.player_evolve import age_player, give_born_new_2d_player, update_age_of_player
 from util.player_interaction_related import *
 # Map related Const
-from util.player_interaction_related import age_player, initialize_locations_in_rectangle, \
-    LIFE_KEY
+from util.player_interaction_related import initialize_locations_in_rectangle
 
 NUM_INITIAL_PLAYER = 8
 MAP_SIZE = (50, 50)
 
 # Player Related Const
 INITIAL_LIFE_SPAN = 50
-Infected_key = "Infected"
-Infection_rate_key = "Infection Rate"
-Recover_rate_key = "Recover Rate"
-Birth_rate_key = "Birth Rate"
 EFFECTIVE_INFECTION_DIST = 5.0
 INITIAL_INFECTION_RATE = 0.5
-Next_Children_Name_Key = 'Next Children Name'
 default_player_state = {
     Next_Children_Name_Key: 'A',
     LIFE_KEY: INITIAL_LIFE_SPAN,
@@ -92,18 +88,7 @@ def cure_player_by_chance(player: InfectionPlayer) -> InfectionPlayer:
         return player
 
 
-infection_player_evolve = lambda x: age_player(cure_player_by_chance(x))
-
-
-def new_player_born(player: InfectionPlayer, loc: TwoDimLocation) -> InfectionPlayer:
-    if loc == player.location:
-        raise ValueError("Location of the children is the same as parent")
-
-    children = player.clone()
-    children.id = get_new_id(player.id)
-    children.location = loc
-    children.state[LIFE_KEY] = INITIAL_LIFE_SPAN
-    return children
+INFECTION_PLAYER_EVOLVE = lambda x: age_player(cure_player_by_chance(x))
 
 
 def initialize_infection_players(names: Iterable[str], locations: List[TwoDimLocation],
@@ -111,17 +96,16 @@ def initialize_infection_players(names: Iterable[str], locations: List[TwoDimLoc
     return [InfectionPlayer(player_id=name,
                             state=state,
                             location=loc,
-                            evolve=infection_player_evolve,
+                            evolve=INFECTION_PLAYER_EVOLVE,
                             interact_player=interact_infection_player)
             for name, loc, state in zip(names, locations, player_states)]
 
 
-def give_born_new_infection_player(player: InfectionPlayer, rectangle_map: TwoDimLocation) -> Optional[InfectionPlayer]:
-    if random.random() > player.state[Birth_rate_key]:
-        return None
-    new_children = generate_children_in_2d(player.location, rectangle_map,
-                                           lambda loc: new_player_born(player, loc), )
-    return new_children
+def give_born_new_infection_player(player: InfectionPlayer, rectangle_map: TwoDimLocation) -> Optional[CellPlayer2D]:
+    new_player = give_born_new_2d_player(player, rectangle_map)
+    if new_player:
+        update_age_of_player(new_player, INITIAL_LIFE_SPAN)
+    return new_player
 
 
 def generate_new_players(players: [InfectionPlayer], map_size: TwoDimLocation) -> [InfectionPlayer]:

@@ -21,13 +21,6 @@ def interact_cell_players(p1: CellPlayer, players: [CellPlayer]) -> CellPlayer:
     return result_player
 
 
-def age_player(player: Player, max_age_speed=AGE_SPEED_MAX) -> Player:
-    result = player.clone()
-    age_speed = random.randint(1, max_age_speed + 1)
-    result.state[LIFE_KEY] -= age_speed
-    return result
-
-
 def initialize_locations_in_rectangle(w, l, number_of_player):
     loc_list = []
     for i in range(number_of_player):
@@ -54,4 +47,3 @@ def generate_new_location_around_current(current: Tuple[int, ...], possibility_b
     return new_pos
 
 
-LIFE_KEY = "Life"
